@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#101827">
+<title>Điện Tử Studio – Schematic & PCB</title>
+<style>
+:root{--bg:#0b1220;--panel:#111c2e;--panel2:#17243a;--line:#2b3b55;--text:#e8eef8;--muted:#9aabc3;--accent:#39c6a5;--yellow:#ffd166;--red:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,Segoe UI,sans-serif}
+header{height:56px;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--line);background:#101a2b;position:sticky;top:0;z-index:5}
+.logo{font-weight:800;letter-spacing:.3px}.logo span{color:var(--accent)}.top-actions{margin-left:auto;display:flex;gap:7px}
+button,select,input{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+button{cursor:pointer}button.primary{background:var(--accent);color:#06251e;border-color:var(--accent);font-weight:700}button.active{border-color:var(--accent);color:var(--accent)}
+main{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100vh - 56px)}
+aside{background:var(--panel);border-right:1px solid var(--line);padding:12px;overflow:auto}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:10px 0}
+.parts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.part{padding:10px 5px;text-align:center;min-height:58px;font-size:12px}
+.part b{display:block;font-size:18px;color:var(--accent);margin-bottom:3px}
+.workspace{min-width:0;display:flex;flex-direction:column}
+.toolbar{display:flex;align-items:center;gap:7px;padding:9px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.mode{display:flex;gap:5px}.hint{color:var(--muted);font-size:12px;margin-left:auto}
+#boardWrap{position:relative;flex:1;min-height:540px;overflow:hidden;background:#0e1929}
+svg#board{width:100%;height:100%;min-height:540px;display:block;touch-action:none;user-select:none}
+#inspector{border-top:1px solid var(--line);background:var(--panel);padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;min-height:58px}
+#inspector label{color:var(--muted);font-size:12px}#inspector input{width:110px;padding:6px}
+.status{color:var(--muted);font-size:12px}
+.mobile-palette{display:none}
+@media(max-width:760px){main{grid-template-columns:1fr}aside{display:none}.toolbar{gap:5px;padding:8px}.toolbar button{padding:7px 8px;font-size:12px}.hint{width:100%;margin:0}#boardWrap,#board{min-height:58vh!important}header{height:52px}.logo{font-size:14px}.mobile-palette{display:flex;gap:6px;overflow:auto;padding:8px;background:var(--panel);border-bottom:1px solid var(--line)}.mobile-palette button{white-space:nowrap;font-size:12px;padding:7px 9px}}
+</style>
+</head>
+<body>
+<header><div class="logo">⚡ ĐIỆN TỬ <span>STUDIO</span></div><div class="status">Bản thử nghiệm 0.1</div><div class="top-actions"><button id="newBtn">Mới</button><button id="saveBtn" class="primary">Lưu</button></div></header>
+<main>
+<aside><h3>Thêm linh kiện</h3><div class="parts" id="parts"></div><h3>Công cụ</h3><div style="display:grid;gap:7px"><button data-tool="select" class="active">↖ Chọn / di chuyển</button><button data-tool="wire">⌁ Nối dây / đường mạch</button><button data-tool="delete">✕ Xóa đối tượng</button><button id="rotateBtn">↻ Xoay linh kiện</button></div><h3>Dự án</h3><div style="display:grid;gap:7px"><button id="loadBtn">Mở file JSON</button><button id="jsonBtn">Xuất JSON</button><button id="svgBtn">Xuất SVG</button><button id="pngBtn">Xuất PNG</button><input type="file" id="fileInput" accept=".json,application/json" hidden></div></aside>
+<section class="workspace">
+<div class="toolbar"><div class="mode"><button id="schMode" class="active">Sơ đồ nguyên lý</button><button id="pcbMode">Thiết kế PCB</button></div><button data-tool="select" class="active">Chọn</button><button data-tool="wire">Nối dây</button><button data-tool="delete">Xóa</button><button id="zoomOut">−</button><button id="zoomIn">+</button><button id="fitBtn">Vừa màn hình</button><span class="hint" id="hint">Chọn linh kiện để đặt lên vùng vẽ.</span></div>
+<div class="mobile-palette" id="mobileParts"></div>
+<div id="boardWrap"><svg id="board" viewBox="0 0 1000 700" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#23334a" stroke-width="1"/></pattern></defs><rect width="100%" height="100%" fill="url(#grid)"/><g id="wires"></g><g id="items"></g><g id="overlay"></g></svg></div>
+<div id="inspector"><span class="status" id="inspectText">Chưa chọn linh kiện. Thêm linh kiện từ danh sách hoặc chuyển sang PCB.</span></div>
+</section></main>
+<script>
+(()=>{
+const $=s=>document.querySelector(s), svg=$('#board'), NS='http://www.w3.org/2000/svg';
+const defs=[
+ ['R','Điện trở','R', '1kΩ'],['C','Tụ điện','C','100nF'],['D','Diode','D','1N4007'],['LED','LED','LED','Đỏ'],['Q','Transistor NPN','Q','BC547'],['P','MOSFET','Q','IRFZ44N'],['U','IC 8 chân','U','NE555'],['J','Đầu nối 2P','J','2 pin'],['V','Nguồn DC','V','12V'],['GND','Mass','GND','GND'],['L','Cuộn cảm','L','10mH'],['SW','Công tắc','SW','SPST']
+];
+let mode='sch',tool='select',items=[],wires=[],selected=null,wireStart=null,scale=1,uid=1,drag=null;
+const colors={R:'#e8eef8',C:'#e8eef8',D:'#e8eef8',LED:'#ff6b6b',Q:'#e8eef8',P:'#e8eef8',U:'#ffd166',J:'#39c6a5',V:'#39c6a5',GND:'#9aabc3',L:'#e8eef8',SW:'#e8eef8'};
+function el(tag,attrs={},parent){let n=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));if(parent)parent.appendChild(n);return n}
+function partButtons(){let html=defs.map(d=>`<button class="part" data-add="${d[0]}"><b>${d[0]}</b>${d[1]}</button>`).join('');$('#parts').innerHTML=html;$('#mobileParts').innerHTML=defs.map(d=>`<button data-add="${d[0]}">${d[0]} · ${d[1]}</button>`).join('');}
+function add(type,x=480,y=300){let d=defs.find(a=>a[0]===type);if(!d)return;let it={id:uid++,type,name:d[2]+(items.filter(a=>a.type===type).length+1),value:d[3],x,y,rot:0};items.push(it);selected=it.id;render();inspect();}
+function pinPos(it,index){let a=it.rot*Math.PI/180, p=mode==='pcb'? (index===0?[-22,0]:[22,0]):(index===0?[-35,0]:[35,0]);return [it.x+p[0]*Math.cos(a)-p[1]*Math.sin(a),it.y+p[0]*Math.sin(a)+p[1]*Math.cos(a)]}
+function drawPart(it){let g=el('g',{transform:`translate(${it.x} ${it.y}) rotate(${it.rot})`,'data-id':it.id,style:'cursor:move'},$('#items'));let col=colors[it.type]||'#e8eef8';if(mode==='pcb'){
+ el('rect',{x:-29,y:-20,width:58,height:40,rx:5,fill:'#174b42',stroke:selected===it.id?'#ffd166':'#39c6a5','stroke-width':2},g);
+ el('text',{x:0,y:4,'text-anchor':'middle',fill:'#d8fff4','font-size':11},g).textContent=it.name;
+ [-22,22].forEach(x=>{el('circle',{cx:x,cy:0,r:7,fill:'#c99b42',stroke:'#ffe0a0','stroke-width':1.5},g);el('circle',{cx:x,cy:0,r:3,fill:'#0b1220'},g)});
+ }else{
+ if(it.type==='R'){el('path',{d:'M-35 0H-20l5 -9 10 18 10 -18 10 18 5 -9h15',fill:'none',stroke:col,'stroke-width':2.4},g)}
+ else if(it.type==='C'){el('path',{d:'M-35 0H-7M-7 -14V14M7 -14V14M7 0H35',stroke:col,'stroke-width':2.4,fill:'none'},g)}
+ else if(it.type==='D'||it.type==='LED'){el('path',{d:'M-35 0H-12M12 0H35',stroke:col,'stroke-width':2.2},g);el('path',{d:'M-12 -12L12 0 -12 12Z',fill:'none',stroke:col,'stroke-width':2},g);el('path',{d:'M12 -13V13',stroke:col,'stroke-width':2},g);if(it.type==='LED'){el('path',{d:'M0 -17l10 -10m-6 0h6v6',stroke:'#ff6b6b',fill:'none'},g)}}
+ else if(it.type==='GND'){el('path',{d:'M0 -15V0M-15 0H15M-10 6H10M-5 12H5',stroke:col,'stroke-width':2,fill:'none'},g)}
+ else if(it.type==='V'){el('circle',{cx:0,cy:0,r:17,fill:'none',stroke:col,'stroke-width':2},g);el('text',{x:0,y:5,'text-anchor':'middle',fill:col,'font-size':17},g).textContent='+'}
+ else if(it.type==='U'){el('rect',{x:-23,y:-18,width:46,height:36,rx:3,fill:'#26364d',stroke:col,'stroke-width':2},g);el('path',{d:'M-7 -18a7 7 0 0 0 14 0',fill:'none',stroke:col},g)}
+ else if(it.type==='Q'||it.type==='P'){el('circle',{cx:0,cy:0,r:17,fill:'none',stroke:col,'stroke-width':2},g);el('path',{d:'M-35 0H-8M8 -25V25M8 -15H30M8 15H30',stroke:col,'stroke-width':2,fill:'none'},g)}
+ else if(it.type==='SW'){el('path',{d:'M-35 0H-10M10 0H35M-10 0L9 -13',stroke:col,'stroke-width':2.3,fill:'none'},g)}
+ else {el('rect',{x:-22,y:-15,width:44,height:30,rx:4,fill:'#26364d',stroke:col,'stroke-width':2},g);el('text',{x:0,y:4,'text-anchor':'middle',fill:col,'font-size':12},g).textContent=it.type}
+ [-35,35].forEach(x=>el('circle',{cx:x,cy:0,r:3.5,fill:'#ffd166',stroke:'#0b1220','stroke-width':1},g));
+ }
+ let t=el('text',{x:0,y:mode==='pcb'?34:34,'text-anchor':'middle',fill:'#e8eef8','font-size':12,'font-weight':'600'},g);t.textContent=it.name;
+ let v=el('text',{x:0,y:mode==='pcb'?47:48,'text-anchor':'middle',fill:'#9aabc3','font-size':10},g);v.textContent=it.value;
+ if(selected===it.id)el('rect',{x:-43,y:-28,width:86,height:60,rx:5,fill:'none',stroke:'#ffd166','stroke-dasharray':'4 3'},g);
+}
+function render(){let ig=$('#items'),wg=$('#wires');ig.innerHTML='';wg.innerHTML='';
+ wires.forEach(w=>{let a=point(w.a),b=point(w.b);if(!a||!b)return;el('path',{d:`M${a[0]} ${a[1]} L${b[0]} ${b[1]}`,stroke:mode==='pcb'?'#e4a64b':'#39c6a5','stroke-width':mode==='pcb'?5:2.5,'stroke-linecap':'round',fill:'none'},wg)});
+ items.forEach(it=>drawPart(it));
+ if(wireStart){let p=point(wireStart);if(p)el('circle',{cx:p[0],cy:p[1],r:7,fill:'#ffd166'},$('#overlay'));}
+}
+function point(ref){let it=items.find(i=>i.id===ref.id);return it?pinPos(it,ref.pin):null}
+function inspect(){let it=items.find(i=>i.id===selected);let box=$('#inspector');if(!it){$('#inspectText').textContent='Chưa chọn linh kiện.';return}
+ box.innerHTML=`<strong>${it.name}</strong><label>Tên <input id="iname" value="${it.name}"></label><label>Giá trị <input id="ivalue" value="${it.value}"></label><label>X <input id="ix" type="number" value="${Math.round(it.x)}"></label><label>Y <input id="iy" type="number" value="${Math.round(it.y)}"></label><button id="apply">Cập nhật</button><span class="status">Chọn công cụ nối dây rồi chạm hai chân linh kiện.</span>`;
+ $('#apply').onclick=()=>{it.name=$('#iname').value;it.value=$('#ivalue').value;it.x=+$('#ix').value;it.y=+$('#iy').value;render();inspect()};
+}
+function setTool(t){tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));$('#hint').textContent=t==='wire'?'Chạm chân linh kiện thứ nhất, sau đó chạm chân thứ hai.':t==='delete'?'Chạm linh kiện hoặc đường nối để xóa.':'Chạm để chọn, kéo để di chuyển.'}
+function setMode(m){mode=m;wireStart=null;$('#schMode').classList.toggle('active',m==='sch');$('#pcbMode').classList.toggle('active',m==='pcb');$('#hint').textContent=m==='pcb'?'PCB minh họa: đặt footprint và nối pad bằng công cụ Nối dây.':'Sơ đồ nguyên lý: thêm linh kiện và nối chân.';render();inspect()}
+function coords(e){let p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;let q=p.matrixTransform(svg.getScreenCTM().inverse());return [q.x,q.y]}
+function nearestPin(x,y){let best=null,dist=18;items.forEach(it=>[0,1].forEach(pin=>{let p=pinPos(it,pin),d=Math.hypot(p[0]-x,p[1]-y);if(d<dist){dist=d;best={id:it.id,pin}}}));return best}
+svg.addEventListener('pointerdown',e=>{let [x,y]=coords(e),g=e.target.closest('[data-id]'),id=g?+g.dataset.id:null;
+ if(tool==='delete'){if(id){items=items.filter(i=>i.id!==id);wires=wires.filter(w=>w.a.id!==id&&w.b.id!==id);selected=null;render();inspect()}return}
+ if(tool==='wire'){let p=nearestPin(x,y);if(p){if(!wireStart){wireStart=p;$('#overlay').innerHTML=''}else{if(wireStart.id!==p.id||wireStart.pin!==p.pin)wires.push({a:wireStart,b:p});wireStart=null;render()}}return}
+ if(id){selected=id;let it=items.find(i=>i.id===id);drag={id,dx:x-it.x,dy:y-it.y};svg.setPointerCapture(e.pointerId);render();inspect()}else{selected=null;render();inspect()}
+});
+svg.addEventListener('pointermove',e=>{if(!drag)return;let [x,y]=coords(e),it=items.find(i=>i.id===drag.id);if(it){it.x=x-drag.dx;it.y=y-drag.dy;render()}});
+svg.addEventListener('pointerup',()=>drag=null);svg.addEventListener('pointercancel',()=>drag=null);
+document.addEventListener('click',e=>{let a=e.target.closest('[data-add]');if(a){add(a.dataset.add,450+Math.random()*80,280+Math.random()*80)}let t=e.target.closest('[data-tool]');if(t)setTool(t.dataset.tool)});
+$('#rotateBtn').onclick=()=>{let it=items.find(i=>i.id===selected);if(it){it.rot=(it.rot+90)%360;render()}};
+$('#schMode').onclick=()=>setMode('sch');$('#pcbMode').onclick=()=>setMode('pcb');
+$('#zoomIn').onclick=()=>zoom(1.2);$('#zoomOut').onclick=()=>zoom(.83);function zoom(f){let v=svg.viewBox.baseVal,cx=v.x+v.width/2,cy=v.y+v.height/2;v.width/=f;v.height/=f;v.x=cx-v.width/2;v.y=cy-v.height/2}
+$('#fitBtn').onclick=()=>svg.setAttribute('viewBox','0 0 1000 700');
+function data(){return {app:'DienTuStudio',version:1,mode,items,wires,uid}}
+function download(name,content,type){let a=document.createElement('a'),u=URL.createObjectURL(new Blob([content],{type}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+$('#saveBtn').onclick=()=>{localStorage.setItem('dts-project',JSON.stringify(data()));$('#saveBtn').textContent='Đã lưu ✓';setTimeout(()=>$('#saveBtn').textContent='Lưu',1300)};
+$('#jsonBtn').onclick=()=>download('mach-dien-tu.json',JSON.stringify(data(),null,2),'application/json');
+$('#loadBtn').onclick=()=>$('#fileInput').click();
+$('#fileInput').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>load(JSON.parse(r.result));r.readAsText(f)};
+function load(d){items=d.items||[];wires=d.wires||[];uid=d.uid||1;selected=null;setMode(d.mode||'sch');render()}
+$('#newBtn').onclick=()=>{if(confirm('Tạo dự án mới?')){items=[];wires=[];selected=null;uid=1;render();inspect()}};
+$('#svgBtn').onclick=()=>{let clone=svg.cloneNode(true);clone.setAttribute('xmlns',NS);download('ban-ve.svg',new XMLSerializer().serializeToString(clone),'image/svg+xml')};
+$('#pngBtn').onclick=()=>{let clone=svg.cloneNode(true);clone.setAttribute('xmlns',NS);let s=new XMLSerializer().serializeToString(clone),u=URL.createObjectURL(new Blob([s],{type:'image/svg+xml'})),im=new Image();im.onload=()=>{let c=document.createElement('canvas');c.width=1600;c.height=1120;c.getContext('2d').drawImage(im,0,0,c.width,c.height);c.toBlob(b=>{let a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='ban-ve.png';a.click();URL.revokeObjectURL(u)})};im.src=u};
+partButtons();setTool('select');let saved=localStorage.getItem('dts-project');if(saved){try{load(JSON.parse(saved))}catch(e){}}else{add('V',180,340);add('R',390,340);add('LED',600,340);add('GND',600,450)}
+})();
+</script>
+</body></html>
